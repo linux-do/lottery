@@ -1,0 +1,2 @@
+# lottery
+LINUX DO Lottery
