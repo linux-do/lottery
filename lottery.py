@@ -5,28 +5,29 @@ import re
 import sys
 from datetime import datetime
 
+import dateutil
 import requests
 
 
 class ForumTopicInfo:
-    def __init__(self, topic_id, post_number=None):
+    def __init__(self, topic_id):
         self.topic_id = topic_id
-        self.post_number = post_number
+        self.title = None
         self.highest_post_number = None
+        self.created_at = None
+        self.last_posted_at = None
         self.base_url = "https://linux.do"
         self.cookies = self._load_cookies()
 
     @classmethod
     def from_url(cls, url):
         """从URL中解析主题信息"""
-        pattern = r"/t/topic/(\d+)(?:/(\d+))?"
+        pattern = r"/t/topic/(\d+)(?:/\d+)?"
         match = re.search(pattern, url)
         if not match:
             raise ValueError("无法从URL中解析出主题ID")
 
-        topic_id = match.group(1)
-        post_number = match.group(2)  # 可能为None
-        return cls(topic_id, post_number)
+        return cls(match.group(1))
 
     @staticmethod
     def _load_cookies():
@@ -54,7 +55,11 @@ class ForumTopicInfo:
                 print("错误: 帖子尚未关闭或存档，不能进行抽奖")
                 sys.exit(1)
 
+            self.title = data['title']
             self.highest_post_number = data['highest_post_number']
+            self.created_at = data['created_at']
+            self.last_posted_at = data['last_posted_at']
+
             return self.highest_post_number
         except requests.RequestException as e:
             print(f"错误: 获取主题信息失败: {str(e)}")
@@ -69,8 +74,8 @@ class ForumTopicInfo:
         return f"{self.base_url}/t/topic/{self.topic_id}/{post_number}"
 
 
-def generate_final_seed(max_floor):
-    """读取seed文件内容并与楼层数一起计算多重哈希值"""
+def generate_final_seed(topic_info, winners_count):
+    """读取seed文件内容并与其他信息一起计算多重哈希值"""
     try:
         with open('seed.txt', 'rb') as f:
             content = f.read()
@@ -78,14 +83,19 @@ def generate_final_seed(max_floor):
                 print("错误: seed.txt文件内容不能为空")
                 sys.exit(1)
 
-        final_content = content + str(max_floor).encode('utf-8')
-        sha256_hash = hashlib.sha256(final_content).hexdigest()
-        sha512_hash = hashlib.sha512(final_content).hexdigest()
+        md5_hash = hashlib.md5(content).hexdigest()
+        sha1_hash = hashlib.sha1(content).hexdigest()
+        sha512_hash = hashlib.sha512(content).hexdigest()
+        combined = '|'.join([
+            md5_hash, sha1_hash, sha512_hash,
+            str(winners_count),
+            str(topic_info.highest_post_number),
+            str(topic_info.topic_id),
+            str(topic_info.created_at),
+            str(topic_info.last_posted_at)
+        ])
 
-        combined_hash = sha256_hash + sha512_hash
-        final_hash = hashlib.sha1(combined_hash.encode('utf-8')).hexdigest()
-
-        return final_hash
+        return hashlib.sha256(combined.encode('utf-8')).hexdigest()
     except FileNotFoundError:
         print("错误: 在当前目录下找不到seed.txt文件")
         sys.exit(1)
@@ -121,7 +131,7 @@ def print_divider(char='=', width=80):
 def get_interactive_input():
     """交互式获取用户输入"""
     print_divider()
-    print("论坛抽奖程序 - 交互模式")
+    print("LINUX DO 抽奖程序 - 交互模式")
     print_divider()
 
     while True:
@@ -172,18 +182,24 @@ def main():
             sys.exit(1)
 
         # 生成最终的seed并抽奖
-        final_seed = generate_final_seed(max_floor)
+        final_seed = generate_final_seed(topic_info, winners_count)
         winning_floors = generate_winning_floors(final_seed, max_floor, winners_count)
 
         # 输出结果
         print_divider()
-        print(f"{'LINUX DO 抽奖结果':^78}")
+        print(f"{'LINUX DO 抽奖结果 - 0.0.2':^78}")
         print_divider()
 
         # 输出基本信息
-        print(f"抽奖时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        created_time = dateutil.parser.parse(topic_info.created_at).astimezone()
+        last_posted_time = dateutil.parser.parse(topic_info.last_posted_at).astimezone()
         base_topic_url = f"{topic_info.base_url}/t/topic/{topic_info.topic_id}"
         print(f"帖子链接: {base_topic_url}")
+        print(f"帖子标题: {topic_info.title}")
+        print(f"发帖时间: {created_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"最后回复: {last_posted_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print_divider('-')
+        print(f"抽奖时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"参与楼层: 2 - {max_floor} 楼")
         print(f"总楼层数: {max_floor} 楼")
         print(f"有效楼层: {max_floor - 1} 楼 (不含主帖)")
