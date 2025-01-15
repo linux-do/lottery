@@ -8,6 +8,11 @@ from datetime import datetime
 import dateutil
 import requests
 
+DRAND_INFO = {
+    "period": 3,
+    "genesis_time": 1692803367,
+    "hash": "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+}
 
 class ForumTopicInfo:
     def __init__(self, topic_id):
@@ -100,7 +105,25 @@ class ForumTopicInfo:
         return f"{self.base_url}/t/topic/{self.topic_id}/{post_number}"
 
 
-def generate_final_seed(topic_info, winners_count):
+def fetch_drand_randomness(last_posted_at):
+    """获取drand随机数"""
+    timestamp = int(dateutil.parser.parse(last_posted_at).timestamp())
+    round_number = (timestamp - DRAND_INFO['genesis_time']) // DRAND_INFO['period']
+    if round_number < 0:
+        print("错误: 计算的drand轮次无效")
+        sys.exit(1)
+    drand_url = f"https://api.drand.sh/{DRAND_INFO['hash']}/public/{round_number}"
+    try:
+        response = requests.get(drand_url)
+        response.raise_for_status()
+        data = response.json()
+        return data['randomness'], data['round']
+    except requests.RequestException as e:
+        print(f"错误: 获取云端随机数失败: {str(e)}")
+        sys.exit(1)
+
+
+def generate_final_seed(topic_info, winners_count, use_drand):
     """读取seed文件内容并与其他信息一起计算多重哈希值"""
     try:
         with open('seed.txt', 'rb') as f:
@@ -120,6 +143,10 @@ def generate_final_seed(topic_info, winners_count):
             str(topic_info.created_at),
             str(topic_info.last_posted_at)
         ])
+
+        if use_drand:
+            drand_randomness, drand_round = fetch_drand_randomness(topic_info.last_posted_at)
+            combined += f"|{drand_randomness}|{drand_round}"
 
         return hashlib.sha256(combined.encode('utf-8')).hexdigest()
     except FileNotFoundError:
@@ -172,7 +199,15 @@ def get_interactive_input():
                 print("错误: 中奖人数必须为大于0的整数")
                 continue
 
-            return topic_url, int(winners_count)
+            use_drand = input("是否启用云端随机数? (y/n) [n]: ").strip().lower()
+            if use_drand in ['y', 'yes', 'true', '1', 'on']:
+                use_drand = True
+            else:
+                use_drand = False
+                print("云端随机数已禁用")
+
+
+            return topic_url, int(winners_count), use_drand
 
         except KeyboardInterrupt:
             print("\n已取消操作")
@@ -187,17 +222,19 @@ def main():
     parser.add_argument('-t', '--terminal', action='store_true', help='启用终端交互模式')
     parser.add_argument('topic_url', nargs='?', help='帖子URL')
     parser.add_argument('winners_count', nargs='?', type=int, help='中奖人数')
+    parser.add_argument('--use-drand', action='store_true', help='启用云端随机数')
 
     args = parser.parse_args()
 
     if args.terminal:
-        topic_url, winners_count = get_interactive_input()
+        topic_url, winners_count, use_drand = get_interactive_input()
     else:
         if args.topic_url is None or args.winners_count is None:
             parser.print_help()
             sys.exit(1)
         topic_url = args.topic_url
         winners_count = args.winners_count
+        use_drand = args.use_drand
 
     try:
         topic_info = ForumTopicInfo.from_url(topic_url)
@@ -209,7 +246,7 @@ def main():
             sys.exit(1)
 
         # 生成最终的seed并抽奖
-        final_seed = generate_final_seed(topic_info, winners_count)
+        final_seed = generate_final_seed(topic_info, winners_count, use_drand)
         winning_floors = generate_winning_floors(final_seed, valid_floors, winners_count)
 
         # 输出结果
@@ -232,6 +269,10 @@ def main():
         print(f"有效楼层: {len(valid_floors)} 楼")
         print(f"中奖数量: {winners_count} 个")
         print(f"最终种子: {final_seed}")
+
+        if use_drand:
+            drand_randomness, drand_round = fetch_drand_randomness(topic_info.last_posted_at)
+            print(f"云端随机数: https://drand.cloudflare.com/{DRAND_INFO['hash']}/public/{drand_round}")
 
         # 输出中奖楼层
         print_divider('-')
