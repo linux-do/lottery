@@ -113,7 +113,7 @@ def generate_winning_floors(seed, max_floor, winners_count):
 
     random.seed(seed)
     winning_floors = []
-    available_floors = list(range(2, max_floor + 1))
+    available_floors = list(range(2, valid_floors_count + 1))
 
     for _ in range(winners_count):
         winner = random.choice(available_floors)
