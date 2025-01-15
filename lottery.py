@@ -70,16 +70,22 @@ class ForumTopicInfo:
 
 
 def generate_final_seed(max_floor):
-    """读取seed文件内容并与楼层数一起计算SHA256哈希值"""
+    """读取seed文件内容并与楼层数一起计算多重哈希值"""
     try:
         with open('seed.txt', 'rb') as f:
             content = f.read()
             if len(content) == 0:
                 print("错误: seed.txt文件内容不能为空")
                 sys.exit(1)
+
         final_content = content + str(max_floor).encode('utf-8')
         sha256_hash = hashlib.sha256(final_content).hexdigest()
-        return sha256_hash
+        sha512_hash = hashlib.sha512(final_content).hexdigest()
+
+        combined_hash = sha256_hash + sha512_hash
+        final_hash = hashlib.sha1(combined_hash.encode('utf-8')).hexdigest()
+
+        return final_hash
     except FileNotFoundError:
         print("错误: 在当前目录下找不到seed.txt文件")
         sys.exit(1)
