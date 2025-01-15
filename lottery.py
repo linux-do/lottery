@@ -17,7 +17,9 @@ class ForumTopicInfo:
         self.created_at = None
         self.last_posted_at = None
         self.base_url = "https://linux.do"
+        self.connect_url = "https://connect.linux.do"
         self.cookies = self._load_cookies()
+        self.valid_post_numbers = []
 
     @classmethod
     def from_url(cls, url):
@@ -42,8 +44,8 @@ class ForumTopicInfo:
         except FileNotFoundError:
             return {}
 
-    def fetch_highest_post_number(self):
-        """获取主题的最高楼层数并检查帖子状态"""
+    def fetch_topic_info(self):
+        """获取主题信息"""
         json_url = f"{self.base_url}/t/{self.topic_id}.json"
         try:
             response = requests.get(json_url, headers=self.cookies)
@@ -55,18 +57,42 @@ class ForumTopicInfo:
                 print("错误: 帖子尚未关闭或存档，不能进行抽奖")
                 sys.exit(1)
 
+            if data.get('category_id') not in [36, 60, 61, 62]:
+                print("错误: 帖子不在指定分类下，不能进行抽奖")
+                sys.exit(1)
+
             self.title = data['title']
             self.highest_post_number = data['highest_post_number']
             self.created_at = data['created_at']
             self.last_posted_at = data['last_posted_at']
 
-            return self.highest_post_number
         except requests.RequestException as e:
             print(f"错误: 获取主题信息失败: {str(e)}")
             print("提示: 如果帖子需要登录，请确保cookies.txt文件存在且内容有效")
             sys.exit(1)
         except KeyError:
             print("错误: 返回的JSON数据格式不正确")
+            sys.exit(1)
+
+    def fetch_valid_post_numbers(self):
+        """获取有效的楼层号"""
+        valid_posts_url = f"{self.connect_url}/api/topic/{self.topic_id}/valid_post_number"
+        try:
+            response = requests.get(valid_posts_url, headers=self.cookies)
+            response.raise_for_status()
+            data = response.json()
+
+            self.valid_post_numbers = data.get('rows', [])
+            if not self.valid_post_numbers:
+                print("错误: 没有找到有效的楼层")
+                sys.exit(1)
+
+            return self.valid_post_numbers
+        except requests.RequestException as e:
+            print(f"错误: 获取有效楼层失败: {str(e)}")
+            sys.exit(1)
+        except (KeyError, ValueError):
+            print("错误: 返回的有效楼层数据格式不正确")
             sys.exit(1)
 
     def get_post_url(self, post_number):
@@ -104,16 +130,16 @@ def generate_final_seed(topic_info, winners_count):
         sys.exit(1)
 
 
-def generate_winning_floors(seed, max_floor, winners_count):
+def generate_winning_floors(seed, valid_floors, winners_count):
     """生成中奖楼层"""
-    valid_floors_count = max_floor - 1
-    if winners_count > valid_floors_count:
-        print(f"错误: 中奖人数({winners_count})不能大于有效楼层数({valid_floors_count})")
+    total_floors = len(valid_floors)
+    if winners_count > total_floors:
+        print(f"错误: 中奖人数({winners_count})不能大于有效楼层数({total_floors})")
         sys.exit(1)
 
     random.seed(seed)
     winning_floors = []
-    available_floors = list(range(2, max_floor + 1))
+    available_floors = valid_floors.copy()
 
     for _ in range(winners_count):
         winner = random.choice(available_floors)
@@ -175,19 +201,20 @@ def main():
 
     try:
         topic_info = ForumTopicInfo.from_url(topic_url)
-        max_floor = topic_info.fetch_highest_post_number()
+        topic_info.fetch_topic_info()
+        valid_floors = topic_info.fetch_valid_post_numbers()
 
-        if max_floor < 2:
-            print("错误: 帖子楼层数必须大于1")
+        if len(valid_floors) < 2:
+            print("错误: 没有足够的参与楼层")
             sys.exit(1)
 
         # 生成最终的seed并抽奖
         final_seed = generate_final_seed(topic_info, winners_count)
-        winning_floors = generate_winning_floors(final_seed, max_floor, winners_count)
+        winning_floors = generate_winning_floors(final_seed, valid_floors, winners_count)
 
         # 输出结果
         print_divider()
-        print(f"{'LINUX DO 抽奖结果 - 0.0.2':^78}")
+        print(f"{'LINUX DO 抽奖结果 - 0.0.3':^78}")
         print_divider()
 
         # 输出基本信息
@@ -200,9 +227,9 @@ def main():
         print(f"最后回复: {last_posted_time.strftime('%Y-%m-%d %H:%M:%S')}")
         print_divider('-')
         print(f"抽奖时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"参与楼层: 2 - {max_floor} 楼")
-        print(f"总楼层数: {max_floor} 楼")
-        print(f"有效楼层: {max_floor - 1} 楼 (不含主帖)")
+        print(f"参与楼层: {valid_floors[0]} - {valid_floors[-1]} 楼")
+        print(f"总楼层数: {topic_info.highest_post_number} 楼")
+        print(f"有效楼层: {len(valid_floors)} 楼")
         print(f"中奖数量: {winners_count} 个")
         print(f"最终种子: {final_seed}")
 
