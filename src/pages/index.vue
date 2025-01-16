@@ -118,7 +118,7 @@
           <v-text-field
             v-model="customServer"
             label="自定义服务器"
-            placeholder="http://localhost:5000"
+            placeholder="/api"
           />
           <v-checkbox
             v-model="customServerEnabled"
@@ -223,7 +223,7 @@ const sendRequest = async (seed) => {
   try {
     const serverUrl = customServerEnabled.value
       ? customServer.value
-      : "http://localhost:5000";
+      : "/api";
     const response = await axios.post(`${serverUrl}/api`, {
       topic_url: topicUrl.value,
       winners_count: winnersCount.value,
