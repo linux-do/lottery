@@ -76,9 +76,6 @@ class ForumTopicInfo:
             if not (data.get('closed') or data.get('archived')):
                 raise ValidationError("帖子尚未关闭或存档，不能进行抽奖")
 
-            if data.get('category_id') not in [36, 60, 61, 62]:
-                raise ValidationError("帖子不在指定分类下，不能进行抽奖")
-
             self.title = data['title']
             self.created_at = data['created_at']
 
@@ -87,7 +84,7 @@ class ForumTopicInfo:
         except KeyError:
             raise TopicError("返回的JSON数据格式不正确")
 
-    def fetch_valid_post_numbers(self):
+    def fetch_valid_post_numbers(self, last_floor=None):
         """获取有效的楼层号"""
         valid_posts_url = f"{self.connect_url}/api/topic/{self.topic_id}/valid_post_number"
         try:
@@ -96,16 +93,19 @@ class ForumTopicInfo:
             data = response.json()
 
             self.valid_post_numbers = data.get('rows', [])
-            if not self.valid_post_numbers:
-                raise ValidationError("没有找到有效的楼层")
-
             self.valid_post_ids = data.get('ids', [])
-            if not self.valid_post_ids:
-                raise ValidationError("没有找到有效的楼层")
-
             self.valid_post_created = data.get('created', [])
-            if not self.valid_post_created:
-                raise ValidationError("没有找到有效的楼层")
+
+            if not self.valid_post_numbers or not self.valid_post_ids or not self.valid_post_created:
+                raise ValidationError("该帖不符合抽奖条件（如：版块错误、帖子未关闭等）")
+
+            if last_floor is not None:
+                cut_index = next((i for i, floor in enumerate(self.valid_post_numbers) if floor > last_floor),
+                                 len(self.valid_post_numbers))
+
+                self.valid_post_numbers = self.valid_post_numbers[:cut_index]
+                self.valid_post_ids = self.valid_post_ids[:cut_index]
+                self.valid_post_created = self.valid_post_created[:cut_index]
 
             return self.valid_post_numbers
         except requests.RequestException as e:
@@ -142,10 +142,6 @@ def generate_final_seed(topic_info, winners_count):
 
 def generate_winning_floors(seed, valid_floors, winners_count):
     """生成中奖楼层"""
-    total_floors = len(valid_floors)
-    if winners_count > total_floors:
-        raise ValidationError(f"中奖人数({winners_count})不能大于有效楼层数({total_floors})")
-
     random.seed(seed)
     winning_floors = []
     available_floors = valid_floors.copy()
@@ -181,7 +177,16 @@ def get_interactive_input():
                 print("错误: 中奖人数必须为大于0的整数")
                 continue
 
-            return topic_url, int(winners_count)
+            last_floor = input("请输入参与抽奖的最后楼层(可选，直接回车使用所有楼层): ")
+            if last_floor:
+                if not last_floor.isdigit() or int(last_floor) < 0:
+                    print("错误: 最后楼层必须为大于0的整数")
+                    continue
+                last_floor = int(last_floor)
+            else:
+                last_floor = None
+
+            return topic_url, int(winners_count), last_floor
 
         except KeyboardInterrupt:
             print("\n已取消操作")
@@ -196,28 +201,32 @@ def main():
     parser.add_argument('-t', '--terminal', action='store_true', help='启用终端交互模式')
     parser.add_argument('topic_url', nargs='?', help='帖子URL')
     parser.add_argument('winners_count', nargs='?', type=int, help='中奖人数')
+    parser.add_argument('-f', '--last-floor', type=int, help='参与抽奖的最后楼层(可选)')
 
     args = parser.parse_args()
 
     if args.terminal:
-        topic_url, winners_count = get_interactive_input()
+        topic_url, winners_count, last_floor = get_interactive_input()
     else:
         if args.topic_url is None or args.winners_count is None:
             parser.print_help()
             sys.exit(1)
         topic_url = args.topic_url
         winners_count = args.winners_count
+        last_floor = args.last_floor
 
     try:
         topic_info = ForumTopicInfo.from_url(topic_url)
         topic_info.fetch_topic_info()
-        valid_floors = topic_info.fetch_valid_post_numbers()
+        valid_floors = topic_info.fetch_valid_post_numbers(last_floor)
+        total_floors = len(valid_floors)
 
-        if len(valid_floors) < 2:
+        if total_floors < 1:
             print("错误: 没有足够的参与楼层")
             sys.exit(1)
 
         # 生成最终的seed并抽奖
+        winners_count = min(winners_count, total_floors)
         final_seed = generate_final_seed(topic_info, winners_count)
         winning_floors = generate_winning_floors(final_seed, valid_floors, winners_count)
 
@@ -235,7 +244,7 @@ def main():
         print_divider('-')
         print(f"抽奖时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"参与楼层: {valid_floors[0]} - {valid_floors[-1]} 楼")
-        print(f"有效楼层: {len(valid_floors)} 楼")
+        print(f"有效楼层: {total_floors} 楼")
         print(f"中奖数量: {winners_count} 个")
         print(f"最终种子: {final_seed}")
 
