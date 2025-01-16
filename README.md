@@ -100,3 +100,12 @@ curl -X POST http://localhost:3000/lottery \
      -F "use_drand=true" \
      -F "seed=example_seed_content"
 ```
+
+```
+DRAND_HASH=52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971
+DRAND_PERIOD=3
+DRAND_GENESIS_TIME=1692803367
+BASE_URL=https://linux.do
+CONNECT_URL=https://connect.linux.do
+DRAND_SERVER=https://drand.cloudflare.com
+```
