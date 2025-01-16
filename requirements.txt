@@ -1,2 +1,6 @@
 python-dateutil
 requests
+
+uvicorn
+fastapi
+pydantic

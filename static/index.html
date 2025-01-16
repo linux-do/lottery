@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINUX DO 抽奖程序</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --error-color: #dc2626;
+            --border-color: #e5e7eb;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-color: #1f2937;
+            --max-width: 800px;
+            --border-radius: 8px;
+            --spacing: 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",SegoeUI,"Noto Sans",NotoSans,Helvetica,Arial,sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.5;
+            padding: var(--spacing);
+        }
+
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: var(--spacing);
+            margin-bottom: var(--spacing);
+        }
+
+        h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-bottom: var(--spacing);
+            color: var(--primary-color);
+            text-align: center;
+        }
+
+        .system-info {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--card-bg);
+            padding: 0.75rem var(--spacing);
+            font-size: 0.75rem;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.5rem;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .copy-button:hover {
+            background-color: var(--bg-color);
+        }
+
+        .copy-button.success {
+            color: #10B981;
+            border-color: #10B981;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        input {
+            width: 100%;
+            padding: 0.625rem;
+            border: 1px solid var(--border-color);
+            border-radius: calc(var(--border-radius) / 2);
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border: none;
+            border-radius: calc(var(--border-radius) / 2);
+            font-size: 1.125rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+            margin-top: 0.5rem;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            background-color: var(--border-color);
+            cursor: not-allowed;
+        }
+
+        .error {
+            color: var(--error-color);
+            background-color: rgba(220, 38, 38, 0.1);
+            padding: 0.75rem;
+            border-radius: calc(var(--border-radius) / 2);
+            margin: var(--spacing) 0;
+            display: none;
+        }
+
+        .result-container {
+            position: relative;
+            margin-top: var(--spacing);
+        }
+
+        textarea {
+            width: 100%;
+            height: 400px;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            resize: vertical;
+            overflow-y: auto;
+            overflow-x: auto;
+            white-space: pre;
+            background-color: #f8f9fa;
+            box-sizing: border-box;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        @media (max-width: 640px) {
+            :root {
+                --spacing: 16px;
+            }
+
+            body {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .card {
+                padding: 1rem;
+            }
+
+            textarea {
+                height: 300px;
+            }
+        }
+
+        /* 添加暗色模式支持 */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1f2937;
+                --card-bg: #111827;
+                --text-color: #f3f4f6;
+                --border-color: #374151;
+            }
+
+            textarea {
+                background-color: #374151;
+                color: var(--text-color);
+            }
+
+            input {
+                background-color: #374151;
+                color: var(--text-color);
+            }
+
+            .system-info {
+                background-color: #111827;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>LINUX DO 抽奖程序</h1>
+
+            <form id="lotteryForm">
+                <div class="form-group">
+                    <label for="topicUrl">帖子 URL</label>
+                    <input type="text" id="topicUrl" required
+                           placeholder="请输入帖子完整 URL">
+                </div>
+
+                <div class="form-group">
+                    <label for="winnersCount">中奖人数</label>
+                    <input type="number" id="winnersCount" min="1" required
+                           placeholder="请输入中奖人数">
+                </div>
+
+                <div class="form-group">
+                    <label for="lastFloor">参与抽奖最后楼层 (选填)</label>
+                    <input type="number" id="lastFloor" min="1"
+                           placeholder="可选，限制参与抽奖的最后楼层">
+                </div>
+
+                <button type="submit" id="submitBtn">开始抽奖</button>
+            </form>
+
+            <div class="error" id="errorMsg"></div>
+
+            <div class="result-container">
+                <div class="copy-button" id="copyButton" title="复制内容">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </div>
+                <textarea id="result" readonly></textarea>
+            </div>
+        </div>
+
+        <footer class="system-info">
+            <div id="systemInfoContent">加载中...</div>
+        </footer>
+    </div>
+
+    <script>
+        // 使用相对路径，这样不需要硬编码服务器地址
+        const API_BASE_URL = '';
+
+        // 获取系统信息
+        async function fetchSystemInfo() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/system-info`);
+                const data = await response.json();
+
+                const systemInfoHtml = `
+                    抽奖程序 v${data.lottery_version} | ${data.os_info} | Python ${data.python_version}
+                `;
+
+                document.getElementById('systemInfoContent').innerHTML = systemInfoHtml;
+            } catch (error) {
+                document.getElementById('systemInfoContent').innerHTML = '获取系统信息失败';
+                showError('获取系统信息失败: ' + error.message);
+            }
+        }
+
+        // 显示错误消息
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMsg');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // 处理表单提交
+        document.getElementById('lotteryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            const resultArea = document.getElementById('result');
+
+            submitBtn.disabled = true;
+            resultArea.value = '抽奖中...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/draw`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        topic_url: document.getElementById('topicUrl').value,
+                        winners_count: parseInt(document.getElementById('winnersCount').value),
+                        last_floor: document.getElementById('lastFloor').value ?
+                                  parseInt(document.getElementById('lastFloor').value) :
+                                  null
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || '抽奖失败');
+                }
+
+                resultArea.value = data.result;
+            } catch (error) {
+                showError(error.message);
+                resultArea.value = '';
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        // 复制功能
+        document.getElementById('copyButton').addEventListener('click', async () => {
+            const textarea = document.getElementById('result');
+            if (!textarea.value) return;
+
+            try {
+                await navigator.clipboard.writeText(textarea.value);
+                const button = document.getElementById('copyButton');
+                button.classList.add('success');
+                setTimeout(() => button.classList.remove('success'), 2000);
+            } catch (err) {
+                showError('复制失败，请手动复制');
+            }
+        });
+
+        // 页面加载时获取系统信息
+        fetchSystemInfo();
+    </script>
+</body>
+</html>
