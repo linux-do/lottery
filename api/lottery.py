@@ -1,7 +1,6 @@
 import hashlib
 import random
 import re
-import json
 import sys
 from flask import Flask, request, jsonify
 
