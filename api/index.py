@@ -48,6 +48,7 @@ class FileError(LotteryError):
 class ForumTopicInfo:
     def __init__(self, topic_id, cookies=None):
         self.topic_id = topic_id
+        self.created_by = None
         self.title = None
         self.highest_post_number = None
         self.created_at = None
@@ -69,7 +70,6 @@ class ForumTopicInfo:
 
         return cls(match.group(1), cookies)
 
-    @staticmethod
     def fetch_topic_info(self):
         """获取主题信息"""
         json_url = f"{self.base_url}/t/{self.topic_id}.json"
@@ -82,13 +82,11 @@ class ForumTopicInfo:
             if not (data.get('closed') or data.get('archived')):
                 raise ValidationError("帖子尚未关闭或存档，不能进行抽奖")
 
-            if data.get('category_id') not in [36, 60, 61, 62]:
-                raise ValidationError("帖子不在指定分类下，不能进行抽奖")
-
             self.title = data['title']
             self.highest_post_number = data['highest_post_number']
             self.created_at = data['created_at']
             self.last_posted_at = data['last_posted_at']
+            self.created_by = data['details']['created_by']['username']
 
         except requests.RequestException as e:
             raise TopicError(f"获取主题信息失败: {str(e)}\n如果帖子需要登录，请确保cookies.txt文件存在且内容有效")
@@ -151,6 +149,7 @@ def generate_final_seed(topic_info, winners_count, use_drand, last_posted_at):
         seed_content = '|'.join([
             str(winners_count),
             str(topic_info.topic_id),
+            str(topic_info.created_by),
             str(topic_info.created_at),
             ','.join([str(i) for i in topic_info.valid_post_ids]),
             ','.join([str(i) for i in topic_info.valid_post_numbers]),
@@ -219,6 +218,8 @@ def lottery():
         last_floor = data.get('last_floor')
         if last_floor:
             last_floor = int(last_floor)
+        else:
+            last_floor = None
 
         use_drand = str(data.get('use_drand', 'false')).lower() in ['true', '1', 'yes', 'y']
         cookies = data.get('cookies', '')
@@ -230,7 +231,7 @@ def lottery():
         print(f"Processing lottery for topic URL: {topic_url} with {winners_count} winners")
 
         topic_info = ForumTopicInfo.from_url(topic_url, cookies)
-        topic_info.fetch_topic_info(topic_info)
+        topic_info.fetch_topic_info()
         valid_floors = topic_info.fetch_valid_post_numbers(last_floor)
 
         if len(valid_floors) < 2:
