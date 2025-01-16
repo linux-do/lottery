@@ -33,14 +33,13 @@ class ForumTopicInfo:
     def __init__(self, topic_id):
         self.topic_id = topic_id
         self.title = None
-        self.highest_post_number = None
         self.created_at = None
-        self.last_posted_at = None
         self.base_url = "https://linux.do"
         self.connect_url = "https://connect.linux.do"
         self.cookies = self._load_cookies()
         self.valid_post_ids = []
         self.valid_post_numbers = []
+        self.valid_post_created = []
 
     @classmethod
     def from_url(cls, url):
@@ -81,9 +80,7 @@ class ForumTopicInfo:
                 raise ValidationError("帖子不在指定分类下，不能进行抽奖")
 
             self.title = data['title']
-            self.highest_post_number = data['highest_post_number']
             self.created_at = data['created_at']
-            self.last_posted_at = data['last_posted_at']
 
         except requests.RequestException as e:
             raise TopicError(f"获取主题信息失败: {str(e)}\n如果帖子需要登录，请确保cookies.txt文件存在且内容有效")
@@ -106,6 +103,10 @@ class ForumTopicInfo:
             if not self.valid_post_ids:
                 raise ValidationError("没有找到有效的楼层")
 
+            self.valid_post_created = data.get('created', [])
+            if not self.valid_post_created:
+                raise ValidationError("没有找到有效的楼层")
+
             return self.valid_post_numbers
         except requests.RequestException as e:
             raise TopicError(f"获取有效楼层失败: {str(e)}")
@@ -118,32 +119,25 @@ class ForumTopicInfo:
 
 
 def generate_final_seed(topic_info, winners_count):
-    """读取seed文件内容并与其他信息一起计算多重哈希值"""
+    """获取帖子信息一起计算多重哈希值"""
     try:
-        with open('seed.txt', 'rb') as f:
-            content = f.read()
-            if len(content) == 0:
-                raise ValidationError("seed.txt文件内容不能为空")
-
-        md5_hash = hashlib.md5(content).hexdigest()
-        sha1_hash = hashlib.sha1(content).hexdigest()
-        sha512_hash = hashlib.sha512(content).hexdigest()
-        combined = '|'.join([
-            md5_hash, sha1_hash, sha512_hash,
+        seed_content = '|'.join([
             str(winners_count),
-            str(topic_info.highest_post_number),
             str(topic_info.topic_id),
             str(topic_info.created_at),
-            str(topic_info.last_posted_at),
             ','.join([str(i) for i in topic_info.valid_post_ids]),
             ','.join([str(i) for i in topic_info.valid_post_numbers]),
-        ])
+            ','.join(topic_info.valid_post_created),
+        ]).encode('utf-8')
 
-        return hashlib.sha256(combined.encode('utf-8')).hexdigest()
-    except FileNotFoundError:
-        raise FileError("在当前目录下找不到seed.txt文件")
+        md5_hash = hashlib.md5(seed_content).hexdigest()
+        sha1_hash = hashlib.sha1(seed_content).hexdigest()
+        sha512_hash = hashlib.sha512(seed_content).hexdigest()
+        combined = (md5_hash + sha1_hash + sha512_hash).encode('utf-8')
+
+        return hashlib.sha256(combined).hexdigest()
     except Exception as e:
-        raise FileError(f"读取seed文件时发生错误: {str(e)}")
+        raise FileError(f"生成seed时发生错误: {str(e)}")
 
 
 def generate_winning_floors(seed, valid_floors, winners_count):
@@ -229,21 +223,18 @@ def main():
 
         # 输出结果
         print_divider()
-        print(f"{'LINUX DO 抽奖结果 - 0.0.4':^78}")
+        print(f"{'LINUX DO 抽奖结果 - 0.0.5':^78}")
         print_divider()
 
         # 输出基本信息
         created_time = dateutil.parser.parse(topic_info.created_at).astimezone()
-        last_posted_time = dateutil.parser.parse(topic_info.last_posted_at).astimezone()
         base_topic_url = f"{topic_info.base_url}/t/topic/{topic_info.topic_id}"
         print(f"帖子链接: {base_topic_url}")
         print(f"帖子标题: {topic_info.title}")
         print(f"发帖时间: {created_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"最后回复: {last_posted_time.strftime('%Y-%m-%d %H:%M:%S')}")
         print_divider('-')
         print(f"抽奖时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"参与楼层: {valid_floors[0]} - {valid_floors[-1]} 楼")
-        print(f"总楼层数: {topic_info.highest_post_number} 楼")
         print(f"有效楼层: {len(valid_floors)} 楼")
         print(f"中奖数量: {winners_count} 个")
         print(f"最终种子: {final_seed}")
