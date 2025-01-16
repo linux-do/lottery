@@ -6,7 +6,6 @@ from flask import Flask, request, jsonify
 
 import dateutil
 import requests
-import argparse
 from dotenv import load_dotenv
 import os
 
@@ -280,30 +279,12 @@ def lottery():
         print(f"Server error: {str(e)}", exc_info=True)
         return jsonify({'error': '服务器内部错误'}), 500
 
-def load_drand_info(hash_value):
-    """加载drand配置信息"""
-    drand_url = f"{DRAND_SERVER}/{hash_value}/info"
-    try:
-        response = requests.get(drand_url)
-        response.raise_for_status()
-        data = response.json()
-        return {
-            "period": data['period'],
-            "genesis_time": data['genesis_time'],
-            "hash": data['hash'],
-        }
-    except requests.RequestException as e:
-        print(f"错误: 获取drand配置信息失败: {str(e)}")
-        sys.exit(1)
+print(f"Loaded DRAND_INFO: {DRAND_INFO}")
+
+# Vercel 入口点
+def handler(event, context):
+    return app(event, context)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='启动服务器并加载drand配置')
-    parser.add_argument('--drand-hash', type=str, help='drand哈希值')
-    args = parser.parse_args()
-
-    if args.drand_hash:
-        DRAND_INFO.update(load_drand_info(args.drand_hash))
-
-    print(f"Loaded DRAND_INFO: {DRAND_INFO}")
-    print("Starting server on port 3000")
-    app.run(host='0.0.0.0', port=3000)
+    print("Starting server")
+    app.run()
