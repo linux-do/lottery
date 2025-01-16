@@ -158,28 +158,27 @@ def fetch_drand_randomness(last_posted_at):
 def generate_final_seed(topic_info, winners_count, use_drand, seed_content):
     """读取seed文件内容并与其他信息一起计算多重哈希值"""
     try:
-        if len(seed_content) == 0:
-            raise ValidationError("seed内容不能为空")
+        seed_content = '|'.join([
+            str(winners_count),
+            str(topic_info.topic_id),
+            str(topic_info.created_at),
+            ','.join([str(i) for i in topic_info.valid_post_ids]),
+            ','.join([str(i) for i in topic_info.valid_post_numbers]),
+            ','.join(topic_info.valid_post_created),
+        ]).encode('utf-8')
 
         md5_hash = hashlib.md5(seed_content).hexdigest()
         sha1_hash = hashlib.sha1(seed_content).hexdigest()
         sha512_hash = hashlib.sha512(seed_content).hexdigest()
-        combined = '|'.join([
-            md5_hash, sha1_hash, sha512_hash,
-            str(winners_count),
-            str(topic_info.highest_post_number),
-            str(topic_info.topic_id),
-            str(topic_info.created_at),
-            str(topic_info.last_posted_at),
-            ','.join([str(i) for i in topic_info.valid_post_ids]),
-            ','.join([str(i) for i in topic_info.valid_post_numbers]),
-        ])
+        combined = (md5_hash + sha1_hash + sha512_hash).encode('utf-8')
 
         if use_drand:
             drand_randomness, drand_round = fetch_drand_randomness(topic_info.last_posted_at)
             combined += f"|{drand_randomness}|{drand_round}"
 
-        return hashlib.sha256(combined.encode('utf-8')).hexdigest()
+        # return hashlib.sha256(combined.encode('utf-8')).hexdigest()
+        return hashlib.sha256(combined).hexdigest()
+
     except Exception as e:
         raise FileError(f"读取seed内容时发生错误: {str(e)}")
 
