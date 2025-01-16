@@ -3,6 +3,7 @@ import random
 import re
 import sys
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 import dateutil
 import requests
@@ -19,6 +20,7 @@ CONNECT_URL = os.getenv('CONNECT_URL', 'https://connect.linux.do')
 DRAND_SERVER = os.getenv('DRAND_SERVER', 'https://drand.cloudflare.com')
 
 app = Flask(__name__)
+CORS(app)
 
 DRAND_INFO = {
     "period": DRAND_PERIOD,
@@ -287,4 +289,5 @@ def handler(event, context):
 
 if __name__ == '__main__':
     print("Starting server")
-    app.run()
+    app.run(host='0.0.0.0', port=5000, debug=True)
+

@@ -2,3 +2,4 @@ python-dateutil
 requests
 python-dotenv
 flask
+flask_cors
