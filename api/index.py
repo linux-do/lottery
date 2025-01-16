@@ -145,7 +145,7 @@ def fetch_drand_randomness(last_posted_at):
         print(f"错误: 获取云端随机数失败: {str(e)}")
         sys.exit(1)
 
-def generate_final_seed(topic_info, winners_count, use_drand):
+def generate_final_seed(topic_info, winners_count, use_drand, last_posted_at):
     """获取帖子信息一起计算多重哈希值"""
     try:
         seed_content = '|'.join([
@@ -163,7 +163,7 @@ def generate_final_seed(topic_info, winners_count, use_drand):
         combined = (md5_hash + sha1_hash + sha512_hash).encode('utf-8')
 
         if use_drand:
-            drand_randomness, drand_round = fetch_drand_randomness(topic_info.last_posted_at)
+            drand_randomness, drand_round = fetch_drand_randomness(last_posted_at)
             combined += f"|{drand_randomness}|{drand_round}".encode('utf-8')
 
         return hashlib.sha256(combined).hexdigest()
@@ -237,7 +237,8 @@ def lottery():
             print("Not enough valid floors")
             raise ValidationError("没有足够的参与楼层")
 
-        final_seed = generate_final_seed(topic_info, winners_count, use_drand)
+        last_posted_at = topic_info.valid_post_created[-1]
+        final_seed = generate_final_seed(topic_info, winners_count, use_drand, last_posted_at)
         winning_floors = generate_winning_floors(final_seed, valid_floors, winners_count)
 
         response = {
@@ -250,7 +251,7 @@ def lottery():
             'winners_count': winners_count,
             'final_seed': final_seed,
             'winning_floors': winning_floors,
-            'drand_randomness': fetch_drand_randomness(topic_info.last_posted_at) if use_drand else None
+            'drand_randomness': fetch_drand_randomness(last_posted_at) if use_drand else None
         }
 
         print("Lottery processed successfully")
