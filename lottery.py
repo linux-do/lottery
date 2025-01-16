@@ -34,6 +34,7 @@ class ForumTopicInfo:
         self.topic_id = topic_id
         self.title = None
         self.created_at = None
+        self.created_by = None
         self.base_url = "https://linux.do"
         self.connect_url = "https://connect.linux.do"
         self.cookies = self._load_cookies()
@@ -78,7 +79,7 @@ class ForumTopicInfo:
 
             self.title = data['title']
             self.created_at = data['created_at']
-
+            self.created_by = data['details']['created_by']['username']
         except requests.RequestException as e:
             raise TopicError(f"获取主题信息失败: {str(e)}\n如果帖子需要登录，请确保cookies.txt文件存在且内容有效")
         except KeyError:
@@ -124,7 +125,8 @@ def generate_final_seed(topic_info, winners_count):
         seed_content = '|'.join([
             str(winners_count),
             str(topic_info.topic_id),
-            str(topic_info.created_at),
+            topic_info.created_by,
+            topic_info.created_at,
             ','.join([str(i) for i in topic_info.valid_post_ids]),
             ','.join([str(i) for i in topic_info.valid_post_numbers]),
             ','.join(topic_info.valid_post_created),
@@ -195,6 +197,8 @@ def get_interactive_input():
             print(f"错误: {str(e)}")
             continue
 
+def lottery_version():
+    return "0.1.0"
 
 def main():
     parser = argparse.ArgumentParser(description='论坛抽奖脚本')
@@ -232,7 +236,7 @@ def main():
 
         # 输出结果
         print_divider()
-        print(f"{'LINUX DO 抽奖结果 - 0.0.5':^78}")
+        print(f"{f'LINUX DO 抽奖结果 - {lottery_version()}':^78}")
         print_divider()
 
         # 输出基本信息
@@ -240,6 +244,7 @@ def main():
         base_topic_url = f"{topic_info.base_url}/t/topic/{topic_info.topic_id}"
         print(f"帖子链接: {base_topic_url}")
         print(f"帖子标题: {topic_info.title}")
+        print(f"帖子作者: {topic_info.created_by}")
         print(f"发帖时间: {created_time.strftime('%Y-%m-%d %H:%M:%S')}")
         print_divider('-')
         print(f"抽奖时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

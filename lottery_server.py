@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from lottery import ForumTopicInfo, generate_final_seed, generate_winning_floors, LotteryError
+from lottery import ForumTopicInfo, generate_final_seed, generate_winning_floors, lottery_version, LotteryError
 
 # 创建应用实例
 app = FastAPI()
@@ -42,6 +42,7 @@ class LotteryRequest(BaseModel):
 class SystemInfo(BaseModel):
     lottery_version: str
     os_info: str
+    arch: str
     python_version: str
 
 
@@ -54,8 +55,9 @@ async def read_root():
 @app.get("/api/system-info")
 async def get_system_info():
     return SystemInfo(
-        lottery_version="0.0.5",
+        lottery_version=lottery_version(),
         os_info=f"{platform.system()} {platform.release()}",
+        arch=platform.machine(),
         python_version=sys.version.split()[0],
     )
 
@@ -86,10 +88,11 @@ async def draw_lottery(request: LotteryRequest):
         divider = "=" * 80 + "\n"
         result = [
             divider,
-            f"{'LINUX DO 抽奖结果 - 0.0.5':^78}\n",
+            f"{f'LINUX DO 抽奖结果 - {lottery_version()}':^78}\n",
             divider,
             f"帖子链接: {base_topic_url}\n",
             f"帖子标题: {topic_info.title}\n",
+            f"帖子作者: {topic_info.created_by}\n",
             f"发帖时间: {created_time.strftime('%Y-%m-%d %H:%M:%S')}\n",
             "-" * 80 + "\n",
             f"抽奖时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n",

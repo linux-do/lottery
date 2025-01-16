@@ -54,6 +54,10 @@
             text-align: center;
         }
 
+        a {
+            color: var(--text-color);
+        }
+
         .system-info {
             position: fixed;
             bottom: 0;
@@ -281,7 +285,7 @@
                 const data = await response.json();
 
                 const systemInfoHtml = `
-                    抽奖程序 v${data.lottery_version} | ${data.os_info} | Python ${data.python_version}
+                    抽奖程序 <a title="GitHub Releases" target="_blank" href="https://github.com/linux-do/lottery/releases/tag/v${data.lottery_version}">v${data.lottery_version}</a> | ${data.os_info} | ${data.arch} | Python ${data.python_version}
                 `;
 
                 document.getElementById('systemInfoContent').innerHTML = systemInfoHtml;
