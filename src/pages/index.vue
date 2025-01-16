@@ -224,7 +224,7 @@ const sendRequest = async (seed) => {
     const serverUrl = customServerEnabled.value
       ? customServer.value
       : "/api";
-    const response = await axios.post(`${serverUrl}/api`, {
+    const response = await axios.post(`${serverUrl}`, {
       topic_url: topicUrl.value,
       winners_count: winnersCount.value,
       use_drand: useDrand.value,
