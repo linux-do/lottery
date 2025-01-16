@@ -12,16 +12,26 @@
         type="number"
         required
       />
-      <v-file-input
-        v-model="seedFile"
-        label="上传 seed 文件"
-        accept=".txt"
-      />
       <v-textarea
         v-model="seedContent"
-        label="或输入 seed 内容"
+        label="输入随机种子内容"
         rows="3"
+        :disabled="seedFile !== null"
       />
+      <v-file-input
+        v-model="seedFile"
+        label="上传随机种子文件"
+        accept=".txt"
+        :disabled="seedContent !== ''"
+        @change="handleFileUpload"
+      />
+      <v-btn
+        v-if="seedFile"
+        variant="text"
+        @click="convertFileToText"
+      >
+        将文件内容转换为文字
+      </v-btn><br v-if="seedFile"><br v-if="seedFile">
       <v-textarea
         v-model="cookies"
         label="Cookies (可选)"
@@ -31,7 +41,21 @@
         type="submit"
         :color="customServerEnabled === true ? 'red' : 'primary'"
       >
-        {{ customServerEnabled ? "提交（自定义服务器）" : "提交" }}
+        {{
+          customServerEnabled
+            ? useDrand
+              ? "提交（自定义服务器）（使用云端随机数）"
+              : "提交（自定义服务器）"
+            : useDrand
+              ? "提交（云端随机数）"
+              : "提交"
+        }}
+      </v-btn>&nbsp;&nbsp;
+      <v-btn
+        variant="text"
+        @click="copyConfig"
+      >
+        复制当前配置
       </v-btn>
     </v-form>
     <v-divider class="my-4" />
@@ -82,12 +106,10 @@
           target="_blank"
           rel="noopener noreferrer"
           append-icon="mdi-open-in-new"
-        :title="`楼层 ${floor}`"
+          :title="`楼层 ${floor}`"
         >
-
           <v-card-text>{{ floor }}</v-card-text>
         </v-card>
-
       </v-card-text>
     </v-card><br>
     <v-expansion-panels>
@@ -102,7 +124,6 @@
             v-model="customServerEnabled"
             label="启用自定义服务器"
           />
-
           <v-checkbox
             v-model="useDrand"
             label="开启云端随机数"
@@ -114,8 +135,11 @@
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { ref, watch, onMounted } from "vue";
 import axios from "axios";
+import { useRoute } from "vue-router";
+
+const route = useRoute();
 
 const topicUrl = ref("");
 const winnersCount = ref(1);
@@ -132,6 +156,43 @@ const customServerEnabled = ref(!!customServer.value);
 watch(customServer, (newVal) => {
   localStorage.setItem("customServer", newVal);
 });
+
+watch(customServerEnabled, (newVal) => {
+  if (!newVal) {
+    localStorage.removeItem("customServer");
+  }
+});
+
+onMounted(() => {
+  const query = route.query;
+  if (query.topic_url) topicUrl.value = query.topic_url;
+  if (query.winners_count) winnersCount.value = parseInt(query.winners_count);
+  if (query.use_drand) useDrand.value = query.use_drand === "true";
+  if (query.seed) seedContent.value = query.seed;
+  if (query.cookies) cookies.value = query.cookies;
+  if (query.custom_server) {
+    customServer.value = query.custom_server;
+    customServerEnabled.value = true;
+  }
+});
+
+const handleFileUpload = () => {
+  if (seedFile.value) {
+    // 文件已上传，等待用户点击按钮转换为文字
+  }
+};
+
+const convertFileToText = () => {
+  if (seedFile.value) {
+    const file = seedFile.value;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      seedContent.value = e.target.result;
+      seedFile.value = null;
+    };
+    reader.readAsText(file);
+  }
+};
 
 const submitForm = async () => {
   try {
@@ -176,6 +237,25 @@ const sendRequest = async (seed) => {
   } finally {
     loading.value = false;
   }
+};
+
+const copyConfig = () => {
+  const query = {
+    topic_url: topicUrl.value,
+    winners_count: winnersCount.value,
+    use_drand: useDrand.value,
+    seed: seedContent.value,
+    cookies: cookies.value,
+  };
+  if (customServerEnabled.value) {
+    query.custom_server = true;
+    query.custom_server_url = customServer.value;
+  }
+  const queryString = new URLSearchParams(query).toString();
+  const url = `${window.location.origin}${window.location.pathname}?${queryString}`;
+  navigator.clipboard.writeText(url).then(() => {
+    alert("配置已复制到剪贴板");
+  });
 };
 </script>
 
