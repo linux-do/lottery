@@ -14,6 +14,26 @@ DRAND_INFO = {
     "hash": "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
 }
 
+class LotteryError(Exception):
+    """抽奖过程中的基础异常类"""
+    pass
+
+
+class TopicError(LotteryError):
+    """主题相关的异常"""
+    pass
+
+
+class ValidationError(LotteryError):
+    """数据验证相关的异常"""
+    pass
+
+
+class FileError(LotteryError):
+    """文件操作相关的异常"""
+    pass
+
+
 class ForumTopicInfo:
     def __init__(self, topic_id):
         self.topic_id = topic_id
@@ -24,6 +44,7 @@ class ForumTopicInfo:
         self.base_url = "https://linux.do"
         self.connect_url = "https://connect.linux.do"
         self.cookies = self._load_cookies()
+        self.valid_post_ids = []
         self.valid_post_numbers = []
 
     @classmethod
@@ -32,7 +53,7 @@ class ForumTopicInfo:
         pattern = r"/t/topic/(\d+)(?:/\d+)?"
         match = re.search(pattern, url)
         if not match:
-            raise ValueError("无法从URL中解析出主题ID")
+            raise ValidationError("无法从URL中解析出主题ID")
 
         return cls(match.group(1))
 
@@ -59,12 +80,10 @@ class ForumTopicInfo:
 
             # 检查帖子是否已关闭或已存档
             if not (data.get('closed') or data.get('archived')):
-                print("错误: 帖子尚未关闭或存档，不能进行抽奖")
-                sys.exit(1)
+                raise ValidationError("帖子尚未关闭或存档，不能进行抽奖")
 
             if data.get('category_id') not in [36, 60, 61, 62]:
-                print("错误: 帖子不在指定分类下，不能进行抽奖")
-                sys.exit(1)
+                raise ValidationError("帖子不在指定分类下，不能进行抽奖")
 
             self.title = data['title']
             self.highest_post_number = data['highest_post_number']
@@ -72,12 +91,9 @@ class ForumTopicInfo:
             self.last_posted_at = data['last_posted_at']
 
         except requests.RequestException as e:
-            print(f"错误: 获取主题信息失败: {str(e)}")
-            print("提示: 如果帖子需要登录，请确保cookies.txt文件存在且内容有效")
-            sys.exit(1)
+            raise TopicError(f"获取主题信息失败: {str(e)}\n如果帖子需要登录，请确保cookies.txt文件存在且内容有效")
         except KeyError:
-            print("错误: 返回的JSON数据格式不正确")
-            sys.exit(1)
+            raise TopicError("返回的JSON数据格式不正确")
 
     def fetch_valid_post_numbers(self):
         """获取有效的楼层号"""
@@ -89,16 +105,17 @@ class ForumTopicInfo:
 
             self.valid_post_numbers = data.get('rows', [])
             if not self.valid_post_numbers:
-                print("错误: 没有找到有效的楼层")
-                sys.exit(1)
+                raise ValidationError("没有找到有效的楼层")
+
+            self.valid_post_ids = data.get('ids', [])
+            if not self.valid_post_ids:
+                raise ValidationError("没有找到有效的楼层")
 
             return self.valid_post_numbers
         except requests.RequestException as e:
-            print(f"错误: 获取有效楼层失败: {str(e)}")
-            sys.exit(1)
+            raise TopicError(f"获取有效楼层失败: {str(e)}")
         except (KeyError, ValueError):
-            print("错误: 返回的有效楼层数据格式不正确")
-            sys.exit(1)
+            raise TopicError("返回的有效楼层数据格式不正确")
 
     def get_post_url(self, post_number):
         """获取特定楼层的URL"""
@@ -129,8 +146,7 @@ def generate_final_seed(topic_info, winners_count, use_drand):
         with open('seed.txt', 'rb') as f:
             content = f.read()
             if len(content) == 0:
-                print("错误: seed.txt文件内容不能为空")
-                sys.exit(1)
+                raise ValidationError("seed.txt文件内容不能为空")
 
         md5_hash = hashlib.md5(content).hexdigest()
         sha1_hash = hashlib.sha1(content).hexdigest()
@@ -141,7 +157,9 @@ def generate_final_seed(topic_info, winners_count, use_drand):
             str(topic_info.highest_post_number),
             str(topic_info.topic_id),
             str(topic_info.created_at),
-            str(topic_info.last_posted_at)
+            str(topic_info.last_posted_at),
+            ','.join([str(i) for i in topic_info.valid_post_ids]),
+            ','.join([str(i) for i in topic_info.valid_post_numbers]),
         ])
 
         if use_drand:
@@ -150,19 +168,16 @@ def generate_final_seed(topic_info, winners_count, use_drand):
 
         return hashlib.sha256(combined.encode('utf-8')).hexdigest()
     except FileNotFoundError:
-        print("错误: 在当前目录下找不到seed.txt文件")
-        sys.exit(1)
+        raise FileError("在当前目录下找不到seed.txt文件")
     except Exception as e:
-        print(f"错误: 读取seed文件时发生错误: {str(e)}")
-        sys.exit(1)
+        raise FileError(f"读取seed文件时发生错误: {str(e)}")
 
 
 def generate_winning_floors(seed, valid_floors, winners_count):
     """生成中奖楼层"""
     total_floors = len(valid_floors)
     if winners_count > total_floors:
-        print(f"错误: 中奖人数({winners_count})不能大于有效楼层数({total_floors})")
-        sys.exit(1)
+        raise ValidationError(f"中奖人数({winners_count})不能大于有效楼层数({total_floors})")
 
     random.seed(seed)
     winning_floors = []
@@ -251,7 +266,7 @@ def main():
 
         # 输出结果
         print_divider()
-        print(f"{'LINUX DO 抽奖结果 - 0.0.3':^78}")
+        print(f"{'LINUX DO 抽奖结果 - 0.0.4':^78}")
         print_divider()
 
         # 输出基本信息
@@ -286,7 +301,7 @@ def main():
         print("注: 楼层顺序即为抽奖顺序")
         print_divider()
 
-    except ValueError as e:
+    except LotteryError as e:
         print(f"错误: {str(e)}")
         sys.exit(1)
 
