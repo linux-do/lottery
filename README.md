@@ -11,18 +11,19 @@ LINUX DO 抽奖脚本
 
 ## 概述
 
-该API允许用户通过HTTP请求进行抽奖操作。用户可以传入帖子URL、中奖人数、是否使用云端随机数以及种子文件内容，API将返回抽奖结果。
+该API允许用户通过HTTP请求进行抽奖操作。用户可以传入帖子URL、中奖人数、是否使用云端随机数以及cookies，API将返回抽奖结果。
 
 ## 接口文档
 
-### POST /lottery
+### POST /api
 
 #### 请求参数
 
 - `topic_url` (string): 帖子URL
 - `winners_count` (integer): 中奖人数
 - `use_drand` (boolean): 是否启用云端随机数
-- `seed` (string): 种子文件内容（可选）
+- `cookies` (string): 用户的cookies（可选）
+- `last_floor` (integer): 参与抽奖的最后楼层（可选）
 
 #### 请求示例
 
@@ -33,7 +34,8 @@ LINUX DO 抽奖脚本
   "topic_url": "https://linux.do/t/topic/12345",
   "winners_count": 3,
   "use_drand": true,
-  "seed": "example_seed_content"
+  "cookies": "example_cookie_content",
+  "last_floor": 50
 }
 ```
 
@@ -43,7 +45,8 @@ LINUX DO 抽奖脚本
 topic_url=https://linux.do/t/topic/12345
 winners_count=3
 use_drand=true
-seed=example_seed_content
+cookies=example_cookie_content
+last_floor=50
 ```
 
 #### 响应参数
@@ -81,24 +84,26 @@ seed=example_seed_content
 ### 使用curl发送JSON请求
 
 ```sh
-curl -X POST http://localhost:3000/lottery \
+curl -X POST http://localhost:5000/api \
      -H "Content-Type: application/json" \
      -d '{
            "topic_url": "https://linux.do/t/topic/12345",
            "winners_count": 3,
            "use_drand": true,
-           "seed": "example_seed_content"
+           "cookies": "example_cookie_content",
+           "last_floor": 50
          }'
 ```
 
 ### 使用curl发送Form-Data请求
 
 ```sh
-curl -X POST http://localhost:3000/lottery \
+curl -X POST http://localhost:5000/api \
      -F "topic_url=https://linux.do/t/topic/12345" \
      -F "winners_count=3" \
      -F "use_drand=true" \
-     -F "seed=example_seed_content"
+     -F "cookies=example_cookie_content" \
+     -F "last_floor=50"
 ```
 
 ```
