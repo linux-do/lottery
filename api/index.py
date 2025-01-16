@@ -206,7 +206,7 @@ def print_divider(char='=', width=80):
     print(char * width)
 
 
-@app.route('/lottery', methods=['POST'])
+@app.route('/', methods=['POST'])
 def lottery():
     try:
         print("Received POST request")
