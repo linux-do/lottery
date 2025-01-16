@@ -155,8 +155,8 @@ def fetch_drand_randomness(last_posted_at):
         sys.exit(1)
 
 
-def generate_final_seed(topic_info, winners_count, use_drand, seed_content):
-    """读取seed文件内容并与其他信息一起计算多重哈希值"""
+def generate_final_seed(topic_info, winners_count, use_drand):
+    """获取帖子信息一起计算多重哈希值"""
     try:
         seed_content = '|'.join([
             str(winners_count),
@@ -174,13 +174,11 @@ def generate_final_seed(topic_info, winners_count, use_drand, seed_content):
 
         if use_drand:
             drand_randomness, drand_round = fetch_drand_randomness(topic_info.last_posted_at)
-            combined += f"|{drand_randomness}|{drand_round}"
+            combined += f"|{drand_randomness}|{drand_round}".encode('utf-8')
 
-        # return hashlib.sha256(combined.encode('utf-8')).hexdigest()
         return hashlib.sha256(combined).hexdigest()
-
     except Exception as e:
-        raise FileError(f"读取seed内容时发生错误: {str(e)}")
+        raise FileError(f"生成seed时发生错误: {str(e)}")
 
 
 def generate_winning_floors(seed, valid_floors, winners_count):
