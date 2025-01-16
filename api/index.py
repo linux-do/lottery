@@ -2,6 +2,7 @@ import hashlib
 import random
 import re
 import sys
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -32,21 +33,17 @@ class LotteryError(Exception):
     """抽奖过程中的基础异常类"""
     pass
 
-
 class TopicError(LotteryError):
     """主题相关的异常"""
     pass
-
 
 class ValidationError(LotteryError):
     """数据验证相关的异常"""
     pass
 
-
 class FileError(LotteryError):
     """文件操作相关的异常"""
     pass
-
 
 class ForumTopicInfo:
     def __init__(self, topic_id, cookies=None):
@@ -60,6 +57,7 @@ class ForumTopicInfo:
         self.cookies = cookies
         self.valid_post_ids = []
         self.valid_post_numbers = []
+        self.valid_post_created = []
 
     @classmethod
     def from_url(cls, url, cookies=None):
@@ -71,19 +69,6 @@ class ForumTopicInfo:
 
         return cls(match.group(1), cookies)
 
-    """
-    def _load_cookies():
-
-        try:
-            with open('cookies.txt', 'r') as f:
-                content = f.read()
-                if len(content) > 0:
-                    return {'Cookie': content.strip()}
-
-                return {}
-        except FileNotFoundError:
-            return {}
-    """
     @staticmethod
     def fetch_topic_info(self):
         """获取主题信息"""
@@ -110,7 +95,7 @@ class ForumTopicInfo:
         except KeyError:
             raise TopicError("返回的JSON数据格式不正确")
 
-    def fetch_valid_post_numbers(self):
+    def fetch_valid_post_numbers(self, last_floor=None):
         """获取有效的楼层号"""
         valid_posts_url = f"{self.connect_url}/api/topic/{self.topic_id}/valid_post_number"
         try:
@@ -119,12 +104,19 @@ class ForumTopicInfo:
             data = response.json()
 
             self.valid_post_numbers = data.get('rows', [])
-            if not self.valid_post_numbers:
-                raise ValidationError("没有找到有效的楼层")
-
             self.valid_post_ids = data.get('ids', [])
-            if not self.valid_post_ids:
-                raise ValidationError("没有找到有效的楼层")
+            self.valid_post_created = data.get('created', [])
+
+            if not self.valid_post_numbers or not self.valid_post_ids or not self.valid_post_created:
+                raise ValidationError("该帖不符合抽奖条件（如：版块错误、帖子未关闭等）")
+
+            if last_floor is not None:
+                cut_index = next((i for i, floor in enumerate(self.valid_post_numbers) if floor > last_floor),
+                                 len(self.valid_post_numbers))
+
+                self.valid_post_numbers = self.valid_post_numbers[:cut_index]
+                self.valid_post_ids = self.valid_post_ids[:cut_index]
+                self.valid_post_created = self.valid_post_created[:cut_index]
 
             return self.valid_post_numbers
         except requests.RequestException as e:
@@ -135,7 +127,6 @@ class ForumTopicInfo:
     def get_post_url(self, post_number):
         """获取特定楼层的URL"""
         return f"{self.base_url}/t/topic/{self.topic_id}/{post_number}"
-
 
 def fetch_drand_randomness(last_posted_at):
     """获取drand随机数"""
@@ -153,7 +144,6 @@ def fetch_drand_randomness(last_posted_at):
     except requests.RequestException as e:
         print(f"错误: 获取云端随机数失败: {str(e)}")
         sys.exit(1)
-
 
 def generate_final_seed(topic_info, winners_count, use_drand):
     """获取帖子信息一起计算多重哈希值"""
@@ -180,7 +170,6 @@ def generate_final_seed(topic_info, winners_count, use_drand):
     except Exception as e:
         raise FileError(f"生成seed时发生错误: {str(e)}")
 
-
 def generate_winning_floors(seed, valid_floors, winners_count):
     """生成中奖楼层"""
     total_floors = len(valid_floors)
@@ -198,11 +187,9 @@ def generate_winning_floors(seed, valid_floors, winners_count):
 
     return winning_floors
 
-
 def print_divider(char='=', width=80):
     """打印分隔线"""
     print(char * width)
-
 
 @app.route('/api', methods=['POST'])
 def lottery():
@@ -210,18 +197,12 @@ def lottery():
         print("Received POST request")
         if request.content_type == 'application/json':
             data = request.json
-            seed_content = data.get('seed', '').encode('utf-8')
             print("Processing JSON data")
         elif request.content_type.startswith('multipart/form-data'):
             data = request.form.to_dict()
             for key in data:
                 if isinstance(data[key], list):
                     data[key] = data[key][0]
-            if 'seed' in request.files:
-                seed_file = request.files['seed']
-                seed_content = seed_file.read()
-            else:
-                seed_content = data.get('seed', '').encode('utf-8')
             print("Processing form-data")
         else:
             print("Unsupported Content-Type")
@@ -235,6 +216,10 @@ def lottery():
             print("Missing parameter: winners_count")
             raise ValidationError("缺少必要的参数: winners_count")
 
+        last_floor = data.get('last_floor')
+        if last_floor:
+            last_floor = int(last_floor)
+
         use_drand = str(data.get('use_drand', 'false')).lower() in ['true', '1', 'yes', 'y']
         cookies = data.get('cookies', '')
 
@@ -246,13 +231,13 @@ def lottery():
 
         topic_info = ForumTopicInfo.from_url(topic_url, cookies)
         topic_info.fetch_topic_info(topic_info)
-        valid_floors = topic_info.fetch_valid_post_numbers()
+        valid_floors = topic_info.fetch_valid_post_numbers(last_floor)
 
         if len(valid_floors) < 2:
             print("Not enough valid floors")
             raise ValidationError("没有足够的参与楼层")
 
-        final_seed = generate_final_seed(topic_info, winners_count, use_drand, seed_content)
+        final_seed = generate_final_seed(topic_info, winners_count, use_drand)
         winning_floors = generate_winning_floors(final_seed, valid_floors, winners_count)
 
         response = {
@@ -275,7 +260,7 @@ def lottery():
         print(f"Lottery error: {str(e)}")
         return jsonify({'error': str(e)}), 400
     except Exception as e:
-        print(f"Server error: {str(e)}", exc_info=True)
+        print(f"Server error: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
 print(f"Loaded DRAND_INFO: {DRAND_INFO}")

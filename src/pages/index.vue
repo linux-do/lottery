@@ -12,26 +12,11 @@
         type="number"
         required
       />
-      <v-textarea
-        v-model="seedContent"
-        label="输入随机种子内容"
-        rows="3"
-        :disabled="seedFile !== null"
+      <v-text-field
+        v-model="lastFloor"
+        label="最后参与抽奖的楼层"
+        type="number"
       />
-      <v-file-input
-        v-model="seedFile"
-        label="上传随机种子文件"
-        accept=".txt"
-        :disabled="seedContent !== ''"
-        @change="handleFileUpload"
-      />
-      <v-btn
-        v-if="seedFile"
-        variant="text"
-        @click="convertFileToText"
-      >
-        将文件内容转换为文字
-      </v-btn><br v-if="seedFile"><br v-if="seedFile">
       <v-textarea
         v-model="cookies"
         label="Cookies (可选)"
@@ -55,7 +40,7 @@
         variant="text"
         @click="copyConfig"
       >
-        复制当前配置
+        复制以分享
       </v-btn>
     </v-form>
     <v-divider class="my-4" />
@@ -119,6 +104,7 @@
             v-model="customServer"
             label="自定义服务器"
             placeholder="/api"
+            :disabled="!customServerEnabled"
           />
           <v-checkbox
             v-model="customServerEnabled"
@@ -127,6 +113,38 @@
           <v-checkbox
             v-model="useDrand"
             label="开启云端随机数"
+          />
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+      <v-expansion-panel title="详细抽奖结果" v-if="result">
+        <v-expansion-panel-text>
+          <v-textarea
+            class="mt-2"
+            readonly
+            rows="20"
+            :value="`
+================================================================================
+                            LINUX DO 抽奖结果 - 0.0.5
+================================================================================
+帖子链接: ${result.topic_url}
+帖子标题: ${result.title}
+发帖时间: ${new Date(result.created_at * 1000).toLocaleString()}
+--------------------------------------------------------------------------------
+抽奖时间: ${new Date().toLocaleString()}
+参与楼层: ${result.valid_post_numbers[0]} - ${result.valid_post_numbers[result.valid_post_numbers.length - 1]} 楼
+有效楼层: ${result.valid_post_numbers.length} 楼
+中奖数量: ${result.winners_count} 个
+最终种子: ${result.final_seed}
+${result.drand_randomness ? `云端随机数: ${result.drand_randomness[0]}
+云端随机轮次: ${result.drand_randomness[1]}` : ''}
+--------------------------------------------------------------------------------
+恭喜以下楼层中奖:
+--------------------------------------------------------------------------------
+${result.winning_floors.map((floor, index) => `[  ${index + 1}   ]    ${floor} 楼，楼层链接: ${`${result.topic_url}/${floor}`} \n`).join('')}
+================================================================================
+注: 楼层顺序即为抽奖顺序
+================================================================================
+`"
           />
         </v-expansion-panel-text>
       </v-expansion-panel>
@@ -143,9 +161,8 @@ const route = useRoute();
 
 const topicUrl = ref("");
 const winnersCount = ref(1);
+const lastFloor = ref(null);
 const useDrand = ref(false);
-const seedFile = ref(null);
-const seedContent = ref("");
 const cookies = ref("");
 const result = ref(null);
 const error = ref("");
@@ -168,31 +185,13 @@ onMounted(() => {
   if (query.topic_url) topicUrl.value = query.topic_url;
   if (query.winners_count) winnersCount.value = parseInt(query.winners_count);
   if (query.use_drand) useDrand.value = query.use_drand === "true";
-  if (query.seed) seedContent.value = query.seed;
   if (query.cookies) cookies.value = query.cookies;
   if (query.custom_server) {
-    customServer.value = query.custom_server;
+    customServer.value = query.custom_server_url;
     customServerEnabled.value = true;
   }
+  if (query.last_floor) lastFloor.value = parseInt(query.last_floor);
 });
-
-const handleFileUpload = () => {
-  if (seedFile.value) {
-    // 文件已上传，等待用户点击按钮转换为文字
-  }
-};
-
-const convertFileToText = () => {
-  if (seedFile.value) {
-    const file = seedFile.value;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      seedContent.value = e.target.result;
-      seedFile.value = null;
-    };
-    reader.readAsText(file);
-  }
-};
 
 const submitForm = async () => {
   try {
@@ -200,18 +199,7 @@ const submitForm = async () => {
     result.value = null;
     loading.value = true;
 
-    let seed = seedContent.value;
-    if (seedFile.value) {
-      const file = seedFile.value;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        seed = e.target.result;
-        sendRequest(seed);
-      };
-      reader.readAsText(file);
-    } else {
-      sendRequest(seed);
-    }
+    sendRequest();
   } catch (err) {
     error.value = "提交表单时发生错误";
     console.error(err);
@@ -219,7 +207,7 @@ const submitForm = async () => {
   }
 };
 
-const sendRequest = async (seed) => {
+const sendRequest = async () => {
   try {
     const serverUrl = customServerEnabled.value
       ? customServer.value
@@ -227,8 +215,8 @@ const sendRequest = async (seed) => {
     const response = await axios.post(`${serverUrl}`, {
       topic_url: topicUrl.value,
       winners_count: winnersCount.value,
+      last_floor: lastFloor.value,
       use_drand: useDrand.value,
-      seed: seed,
       cookies: cookies.value,
     });
     result.value = response.data;
@@ -244,8 +232,8 @@ const copyConfig = () => {
     topic_url: topicUrl.value,
     winners_count: winnersCount.value,
     use_drand: useDrand.value,
-    seed: seedContent.value,
     cookies: cookies.value,
+    last_floor: lastFloor.value,
   };
   if (customServerEnabled.value) {
     query.custom_server = true;
