@@ -198,7 +198,7 @@ def get_interactive_input():
             continue
 
 def lottery_version():
-    return "0.1.0"
+    return "0.1.1"
 
 def main():
     parser = argparse.ArgumentParser(description='论坛抽奖脚本')
