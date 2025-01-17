@@ -353,7 +353,7 @@
             if (!textarea.value) return;
 
             try {
-                await navigator.clipboard.writeText('```\ntext' + textarea.value + '\n```');
+                await navigator.clipboard.writeText('```text\n' + textarea.value + '\n```');
                 const button = document.getElementById('copyButton');
                 button.classList.add('success');
                 setTimeout(() => button.classList.remove('success'), 2000);
