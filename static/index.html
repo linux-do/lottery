@@ -85,6 +85,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            color: var(--text-color);
         }
 
         .copy-button:hover {
@@ -284,8 +285,9 @@
                 const response = await fetch(`${API_BASE_URL}/api/system-info`);
                 const data = await response.json();
 
-                const systemInfoHtml = `
-                    抽奖程序 <a title="GitHub Releases" target="_blank" href="https://github.com/linux-do/lottery/releases/tag/v${data.lottery_version}">v${data.lottery_version}</a> | ${data.os_info} | ${data.arch} | Python ${data.python_version}
+            const systemInfoHtml = `
+                    <p>${data.os_info} | ${data.arch} | Python ${data.python_version}</p>
+                    <p>LINUX DO Lottery <a title="GitHub Releases" target="_blank" href="https://github.com/linux-do/lottery/releases/tag/v${data.lottery_version}">v${data.lottery_version}</a> - ${data.user}</p>
                 `;
 
                 document.getElementById('systemInfoContent').innerHTML = systemInfoHtml;
@@ -351,7 +353,7 @@
             if (!textarea.value) return;
 
             try {
-                await navigator.clipboard.writeText(textarea.value);
+                await navigator.clipboard.writeText('```\ntext' + textarea.value + '\n```');
                 const button = document.getElementById('copyButton');
                 button.classList.add('success');
                 setTimeout(() => button.classList.remove('success'), 2000);
